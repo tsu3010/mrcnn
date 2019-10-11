@@ -1,0 +1,417 @@
+#!/usr/bin/env python
+
+import argparse
+import imgaug
+from mrcnn import model as modellib, utils
+from mrcnn.jobs import ship, nucleus, coco, shapes
+
+
+
+if __name__ == '__main__':
+
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(prog='mrcnn')
+    subparsers = parser.add_subparsers(dest='cmd', help='sub-commands')
+
+    parser_ship = subparsers.add_parser('train_ship', help='Train Mask R-CNN to detect ships.')
+
+    parser_ship.add_argument("command", required=True,
+                        metavar="<command>",
+                        help="'train' or 'splash'")
+    parser_ship.add_argument('--dataset', required=False,
+                        metavar="/path/to/ship/dataset/",
+                        help='Directory of the Ship dataset')
+    parser_ship.add_argument('--weights', required=True,
+                        metavar="/path/to/weights.h5",
+                        help="Path to weights .h5 file or 'coco'")
+    parser_ship.add_argument('--logs', required=False,
+                        default=DEFAULT_LOGS_DIR,
+                        metavar="/path/to/logs/",
+                        help='Logs and checkpoints directory (default=logs/)')
+    parser_ship.add_argument('--image', required=False,
+                        metavar="path or URL to image",
+                        help='Image to apply the color splash effect on')
+    parser_ship.add_argument('--video', required=False,
+                        metavar="path or URL to video",
+                        help='Video to apply the color splash effect on')
+    parser_ship.add_argument('--coco-weight-path', required=True,
+                        metavar="path to h5 model file",
+                        help='path to h5 model file')
+    args_ship = parser_ship.parse_args()
+
+    # Validate arguments
+    if args_ship.command == "train":
+        assert args_ship.dataset, "Argument --dataset is required for training"
+    elif args_ship.command == "splash":
+        assert args_ship.image or args_ship.video,\
+               "Provide --image or --video to apply color splash"
+
+    print("Weights: ", args_ship.weights)
+    print("Dataset: ", args_ship.dataset)
+    print("Logs: ", args_ship.logs)
+
+    # Configurations
+    if args_ship.command == "train":
+        config = ship.ShipConfig()
+    else:
+        class InferenceConfig(ShipConfig):
+            # Set batch size to 1 since we'll be running inference on
+            # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
+            GPU_COUNT = 1
+            IMAGES_PER_GPU = 1
+        config = ship.InferenceConfig()
+    config.display()
+
+    # Create model
+    if args_ship.command == "train":
+        model = modellib.MaskRCNN(mode="training", config=config,
+                                  model_dir=args_ship.logs)
+    else:
+        model = modellib.MaskRCNN(mode="inference", config=config,
+                                  model_dir=args_ship.logs)
+
+    # Select weights file to load
+    if args_ship.weights.lower() == "coco":
+        weights_path = args_ship.coco_weight_path
+        # Download weights file
+        if not os.path.exists(weights_path):
+            utils.download_trained_weights(weights_path)
+    elif args_ship.weights.lower() == "last":
+        # Find last trained weights
+        weights_path = model.find_last()
+    elif args_ship.weights.lower() == "imagenet":
+        # Start from ImageNet trained weights
+        weights_path = model.get_imagenet_weights()
+    else:
+        weights_path = args_ship.weights
+
+    # Load weights
+    print("Loading weights ", weights_path)
+    if args_ship.weights.lower() == "coco":
+        # Exclude the last layers because they require a matching
+        # number of classes
+        model.load_weights(weights_path, by_name=True, exclude=[
+            "mrcnn_class_logits", "mrcnn_bbox_fc",
+            "mrcnn_bbox", "mrcnn_mask"])
+    else:
+        model.load_weights(weights_path, by_name=True)
+
+    # Train or evaluate
+    if args_ship.command == "train":
+        ship.train(model)
+    elif args_ship.command == "splash":
+        ship.detect_and_color_splash(model, image_path=args_ship.image,
+                                video_path=args_ship.video)
+    else:
+        print("'{}' is not recognized. "
+              "Use 'train' or 'splash'".format(args_ship.command))
+
+    parser_nucleus = subparsers.add_parser('train_nucleus', help='Mask R-CNN for nuclei counting and segmentation')
+    parser_nucleus.add_argument("command",
+                        metavar="<command>",
+                        help="'train' or 'detect'")
+    parser_nucleus.add_argument('--dataset', required=False,
+                        metavar="/path/to/dataset/",
+                        help='Root directory of the dataset')
+    parser_nucleus.add_argument('--weights', required=True,
+                        metavar="/path/to/weights.h5",
+                        help="Path to weights .h5 file or 'coco'")
+    parser_nucleus.add_argument('--logs', required=False,
+                        default=DEFAULT_LOGS_DIR,
+                        metavar="/path/to/logs/",
+                        help='Logs and checkpoints directory (default=logs/)')
+    parser_nucleus.add_argument('--subset', required=False,
+                        metavar="Dataset sub-directory",
+                        help="Subset of dataset to run prediction on")
+    parser_nucleus.add_argument('--coco-weight-path', required=True,
+                        metavar="path to h5 model file",
+                        help='path to h5 model file')
+
+    args_nucleus = parser_nucleus.parse_args()
+
+    # Validate arguments
+    if args_nucleus.command == "train":
+        assert args_nucleus.dataset, "Argument --dataset is required for training"
+    elif args_nucleus.command == "detect":
+        assert args_nucleus.subset, "Provide --subset to run prediction on"
+
+    print("Weights: ", args_nucleus.weights)
+    print("Dataset: ", args_nucleus.dataset)
+    if args_nucleus.subset:
+        print("Subset: ", args_nucleus.subset)
+    print("Logs: ", args_nucleus.logs)
+
+    # Configurations
+    if args_nucleus.command == "train":
+        config = nucleus.NucleusConfig()
+    else:
+        config = nucleus.NucleusInferenceConfig()
+    config.display()
+
+    # Create model
+    if args_nucleus.command == "train":
+        model = modellib.MaskRCNN(mode="training", config=config,
+                                  model_dir=args_nucleus.logs)
+    else:
+        model = modellib.MaskRCNN(mode="inference", config=config,
+                                  model_dir=args_nucleus.logs)
+
+    # Select weights file to load
+    if args_nucleus.weights.lower() == "coco":
+        weights_path = args_nucleus.coco_weight_path
+        # Download weights fileleus.leus.leus.leus.
+        if not os.path.exists(weights_path):
+            utils.download_trained_weights(weights_path)
+    elif args_nucleus.weights.lower() == "last":
+        # Find last trained weights
+        weights_path = model.find_last()
+    elif args_nucleus.weights.lower() == "imagenet":
+        # Start from ImageNet trained weights
+        weights_path = model.get_imagenet_weights()
+    else:
+        weights_path = args_nucleus.weights
+
+    # Load weights
+    print("Loading weights ", weights_path)
+    if args_nucleus.weights.lower() == "coco":
+        # Exclude the last layers because they require a matching
+        # number of classes
+        model.load_weights(weights_path, by_name=True, exclude=[
+            "mrcnn_class_logits", "mrcnn_bbox_fc",
+            "mrcnn_bbox", "mrcnn_mask"])
+    else:
+        model.load_weights(weights_path, by_name=True)
+
+    # Train or evaluate
+    if args_nucleus.command == "train":
+        train(model, args_nucleus.dataset, args_nucleus.subset)
+    elif args_nucleus.command == "detect":
+        detect(model, args_nucleus.dataset, args_nucleus.subset)
+    else:
+        print("'{}' is not recognized. "
+              "Use 'train' or 'detect'".format(args_nucleus.command))
+
+
+    parser_coco = subparsers.add_parser('train_coco', help='Train Mask R-CNN on MS COCO.')
+    
+    parser_coco.add_argument("command",
+                        metavar="<command>",
+                        help="'train' or 'evaluate' on MS COCO")
+    parser_coco.add_argument('--dataset', required=True,
+                        metavar="/path/to/coco/",
+                        help='Directory of the MS-COCO dataset')
+    parser_coco.add_argument('--year', required=False,
+                        default=coco.DEFAULT_DATASET_YEAR,
+                        metavar="<year>",
+                        help='Year of the MS-COCO dataset (2014 or 2017) (default=2014)')
+    parser_coco.add_argument('--model', required=True,
+                        metavar="/path/to/weights.h5",
+                        help="Path to weights .h5 file or 'coco'")
+    parser_coco.add_argument('--logs', required=False,
+                        default=DEFAULT_LOGS_DIR,
+                        metavar="/path/to/logs/",
+                        help='Logs and checkpoints directory (default=logs/)')
+    parser_coco.add_argument('--limit', required=False,
+                        default=500,
+                        metavar="<image count>",
+                        help='Images to use for evaluation (default=500)')
+    parser_coco.add_argument('--download', required=False,
+                        default=False,
+                        metavar="<True|False>",
+                        help='Automatically download and unzip MS-COCO files (default=False)',
+                        type=bool)
+    parser_coco.add_argument('--coco-weight-path', required=True,
+                        metavar="path to h5 model file",
+                        help='path to h5 model file')
+    args_coco = parser_coco.parse_args()
+    print("Command: ", args_coco.command)
+    print("Model: ", args_coco.model)
+    print("Dataset: ", args_coco.dataset)
+    print("Year: ", args_coco.year)
+    print("Logs: ", args_coco.logs)
+    print("Auto Download: ", args_coco.download)
+
+    # Configurations
+    if args_coco.command == "train":
+        config = coco.CocoConfig()
+    else:
+        class InferenceConfig(coco.CocoConfig):
+            # Set batch size to 1 since we'll be running inference on
+            # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
+            GPU_COUNT = 1
+            IMAGES_PER_GPU = 1
+            DETECTION_MIN_CONFIDENCE = 0
+        config = coco.InferenceConfig()
+    config.display()
+
+    # Create model
+    if args_coco.command == "train":
+        model = modellib.MaskRCNN(mode="training", config=config,
+                                  model_dir=args_coco.logs)
+    else:
+        model = modellib.MaskRCNN(mode="inference", config=config,
+                                  model_dir=args_coco.logs)
+
+    # Select weights file to load
+    if args_coco.model.lower() == "coco":
+        model_path = args_coco.coco_weight_path
+    elif args_coco.model.lower() == "last":
+        # Find last trained weights
+        model_path = model.find_last()
+    elif args_coco.model.lower() == "imagenet":
+        # Start from ImageNet trained weights
+        model_path = model.get_imagenet_weights()
+    else:
+        model_path = args_coco.model
+
+    # Load weights
+    print("Loading weights ", model_path)
+    model.load_weights(model_path, by_name=True)
+
+    # Train or evaluate
+    if args_coco.command == "train":
+        # Training dataset. Use the training set and 35K from the
+        # validation set, as as in the Mask RCNN paper.
+        dataset_train = coco.CocoDataset()
+        dataset_train.load_coco(args_coco.dataset, "train", year=args_coco.year, auto_download=args_coco.download)
+        if args_coco.year in '2014':
+            dataset_train.load_coco(args_coco.dataset, "valminusminival", year=args_coco.year, auto_download=args_coco.download)
+        dataset_train.prepare()
+
+        # Validation dataset
+        dataset_val = coco.CocoDataset()
+        val_type = "val" if args_coco.year in '2017' else "minival"
+        dataset_val.load_coco(args_coco.dataset, val_type, year=args_coco.year, auto_download=args_coco.download)
+        dataset_val.prepare()
+
+        # Image Augmentation
+        # Right/Left flip 50% of the time
+        augmentation = imgaug.augmenters.Fliplr(0.5)
+
+        # *** This training schedule is an example. Update to your needs ***
+
+        # Training - Stage 1
+        print("Training network heads")
+        model.train(dataset_train, dataset_val,
+                    learning_rate=config.LEARNING_RATE,
+                    epochs=40,
+                    layers='heads',
+                    augmentation=augmentation)
+
+        # Training - Stage 2
+        # Finetune layers from ResNet stage 4 and up
+        print("Fine tune Resnet stage 4 and up")
+        model.train(dataset_train, dataset_val,
+                    learning_rate=config.LEARNING_RATE,
+                    epochs=120,
+                    layers='4+',
+                    augmentation=augmentation)
+
+        # Training - Stage 3
+        # Fine tune all layers
+        print("Fine tune all layers")
+        model.train(dataset_train, dataset_val,
+                    learning_rate=config.LEARNING_RATE / 10,
+                    epochs=160,
+                    layers='all',
+                    augmentation=augmentation)
+
+    elif args_coco.command == "evaluate":
+        # Validation dataset
+        dataset_val = coco.CocoDataset()
+        val_type = "val" if args_coco.year in '2017' else "minival"
+        coco = dataset_val.load_coco(args_coco.dataset, val_type, year=args_coco.year, return_coco=True, auto_download=args_coco.download)
+        dataset_val.prepare()
+        print("Running COCO evaluation on {} images.".format(args_coco.limit))
+        coco.evaluate_coco(model, dataset_val, coco, "bbox", limit=int(args_coco.limit))
+    else:
+        print("'{}' is not recognized. "
+              "Use 'train' or 'evaluate'".format(args_coco.command))
+
+    parser_shapes = subparsers.add_parser('train_shapes', help='Train Mask R-CNN on random shapes.')
+    
+    parser_shapes.add_argument("command",
+                        metavar="<command>",
+                        help="'train on MS COCO",
+                        default='train')
+    parser_shapes.add_argument('--train-size', required=False,
+                        default=200,
+                        help='Size of training dataset')
+    parser_shapes.add_argument('--validation-size', required=True,
+                        help="Size of Validation dataset")
+    parser_shapes.add_argument('--logs', required=False,
+                        default=DEFAULT_LOGS_DIR,
+                        metavar="/path/to/logs/",
+                        help='Logs and checkpoints directory (default=logs/)')
+    parser_shapes.add_argument('--init-with', required=False,
+                        default=500,
+                        metavar="<image count>",
+                        help='Images to use for evaluation (default=500)')
+    # parser_shapes.add_argument('--download', required=False,
+    #                     default=False,
+    #                     metavar="<True|False>",
+    #                     help='Automatically download and unzip MS-COCO files (default=False)',
+    #                     type=bool)
+    parser_shapes.add_argument('--coco-weight-path', required=True,
+                        metavar="path to h5 model file",
+                        help='path to h5 model file')
+    args_shapes = parser_shapes.parse_args()
+    # print("Command: ", args_shapes.command)
+    # print("Model: ", args_shapes.model)
+    # print("Dataset: ", args_shapes.dataset)
+    # print("Year: ", args_shapes.year)
+    # print("Logs: ", args_shapes.logs)
+    # print("Auto Download: ", args_shapes.download)
+
+    # Configurations
+    
+    config = shapes.ShapesConfig()
+    # Training dataset
+    dataset_train = shapes.ShapesDataset()
+    dataset_train.load_shapes(args_shapes.train_size, config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1])
+    dataset_train.prepare()
+
+    # Validation dataset
+    dataset_val = shapes.ShapesDataset()
+    dataset_val.load_shapes(args_shapes.validation_size, config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1])
+    dataset_val.prepare()
+
+    # Create model
+    if args_shapes.command == "train":
+        # Create model in training mode
+        model = modellib.MaskRCNN(mode="training", config=config,
+                                  model_dir=args_shapes.logs)
+
+        if args_shapes.init_with == "imagenet":
+            model.load_weights(model.get_imagenet_weights(), by_name=True)
+        elif args_shapes.init_with == "coco":
+            # Load weights trained on MS COCO, but skip layers that
+            # are different due to the different number of classes
+            # See README for instructions to download the COCO weights
+            model.load_weights(args_shapes.coco_weight_path, by_name=True,
+                               exclude=["mrcnn_class_logits", "mrcnn_bbox_fc", 
+                                        "mrcnn_bbox", "mrcnn_mask"])
+        elif args_shapes.init_with == "last":
+            # Load the last model you trained and continue training
+            model.load_weights(model.find_last(), by_name=True)
+        model.train(dataset_train, dataset_val, 
+                    learning_rate=config.LEARNING_RATE, 
+                    epochs=1, 
+                    layers='heads')
+        model.train(dataset_train, dataset_val, 
+            learning_rate=config.LEARNING_RATE / 10,
+            epochs=2, 
+            layers="all")
+    elif args_shapes.command == "inference":
+        inference_config = shapes.InferenceConfig()
+        model = modellib.MaskRCNN(mode="inference", 
+                          config=inference_config,
+                          model_dir=MODEL_DIR)
+        model_path = model.find_last()
+        # Load trained weights
+        print("Loading weights from ", model_path)
+        model.load_weights(model_path, by_name=True)
+        
+
+
+
