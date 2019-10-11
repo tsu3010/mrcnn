@@ -13,26 +13,31 @@ Mask R CNN is an extension of Faster R CNN. Faster R-CNN predicts bounding boxes
 more information on MAsk R CNN can be found in following resources
 - <https://medium.com/free-code-camp/mask-r-cnn-explained-7f82bec890e3>
 
+## Shortfalls
+
+Apart from solving the AI problem, any machine learning solution should robust like an industrial product. It should be testable, scalable, recoverable, etc. If an application has achieve a fair level of these commandments, it can be considered a dependable solution, and can be extended to solve other ML problems. More details on this [page](https://www.linkedin.com/pulse/eleven-commandments-framework-building-machine-learning-soma-dhavala)
+
 ## Additions in the package
+
 
 ### Build process
 
 The package is build using pybuilder. The build process has the following features:
-1. __Module testing__: Each function of the package is tested using `pytest`. The package will not build if any test fails
+1. __Module testing__: Each function of the package is tested using `pytest`. The package will not build if any test fails. This feature improves code testability
 2. __Coverage test__: The build looks for a 70% coverage of unittests. This enforces the author to write test cases for all modules, classes and functions in the core library.
-3. __Documentation__: Auto-generated documentation is generated using the sphinx library. Documentation can be configured by `mrcnn/docs/source/conf.py` file. 
-4. __Static versions__: Cross-version compatibility of dependent libraries are critical to a fail-safe package. Therefore, version of all the dependent libraries are fixed in `mrcnn/requirements.txt`. e.g. tensorflow changed its random module, and functions such as `tf.random_shuffle` are moved to `tf.random.shuffle`. Similarly, `tf.log` is moved to `tf.keras.backend.log`. Therefore, for the code to work, library versions need to be fixed
+3. __Documentation__: Auto-generated documentation is generated using the sphinx library. Documentation can be configured by `mrcnn/docs/source/conf.py` file. This improves code readibility and diagnosibility
+4. __Static versions__: Cross-version compatibility of dependent libraries are critical to a fail-safe package. Therefore, version of all the dependent libraries are fixed in `mrcnn/requirements.txt`. This imporves robustness, repeatibility and reproducability. 
 
 
-### Scripts
+## Scripts
 
-1. __Jobs__: Jobs such as training ship data, training shapes data, running coco model are scripted in `jobs/` folder, and are called upon in the `mrcnn/src/main/scripts/mrcnn` file. The functions used in this script can be accessed from cmd, once the build package is installed from the `.tar` file.
+1. __Jobs__: Jobs such as training ship data, training shapes data, running coco model are scripted in `jobs/` folder, and are called upon in the `mrcnn/src/main/scripts/mrcnn` file. The functions used in this script can be accessed from cmd, once the build package is installed from the `.tar` file. This makes code delivery simpler and user friendly
 
 2. __Job Arguments__: APIs are exposed to take in job arguments and the arguments are validated in each script.
 
 ## Next Steps
 
-1. Improve parallelization using Kubernetes or EMR clusters
+1. Improve parallelization using Kubernetes or EMR clusters. This will improve scalability and robusness of the module.
 2. Improve the code testing and add more tests in `mrcnn/src/unittest/python/mrcnn`
 3. Add more jobs in `mrcnn/src/main/scripts/` and `mrcnn/src/main/python/mrcnn/python`
-4. Execute end-to-end pipeline  
+4. Execute end-to-end pipeline
