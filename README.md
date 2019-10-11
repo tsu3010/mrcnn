@@ -24,7 +24,7 @@ The package is build using pybuilder. The build process has the following featur
 4. __Static versions__: Cross-version compatibility of dependent libraries are critical to a fail-safe package. Therefore, version of all the dependent libraries are fixed in `mrcnn/requirements.txt`. e.g. tensorflow changed its random module, and functions such as `tf.random_shuffle` are moved to `tf.random.shuffle`. Similarly, `tf.log` is moved to `tf.keras.backend.log`. Therefore, for the code to work, library versions need to be fixed
 
 
-## Scripts
+### Scripts
 
 1. __Jobs__: Jobs such as training ship data, training shapes data, running coco model are scripted in `jobs/` folder, and are called upon in the `mrcnn/src/main/scripts/mrcnn` file. The functions used in this script can be accessed from cmd, once the build package is installed from the `.tar` file.
 
