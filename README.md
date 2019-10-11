@@ -21,7 +21,7 @@ The package is build using pybuilder. The build process has the following featur
 1. __Module testing__: Each function of the package is tested using `pytest`. The package will not build if any test fails
 2. __Coverage test__: The build looks for a 70% coverage of unittests. This enforces the author to write test cases for all modules, classes and functions in the core library.
 3. __Documentation__: Auto-generated documentation is generated using the sphinx library. Documentation can be configured by `mrcnn/docs/source/conf.py` file. 
-4. __Static versions__: Cross-version compatibility of dependent libraries are critical to a fail-safe package. Therefore, version of all the dependent libraries are fixed in `mrcnn/requirements.txt`
+4. __Static versions__: Cross-version compatibility of dependent libraries are critical to a fail-safe package. Therefore, version of all the dependent libraries are fixed in `mrcnn/requirements.txt`. e.g. tensorflow changed its random module, and functions such as `tf.random_shuffle` are moved to `tf.random.shuffle`. Similarly, `tf.log` is moved to `tf.keras.backend.log`. Therefore, for the code to work, library versions need to be fixed
 
 
 ## Scripts
